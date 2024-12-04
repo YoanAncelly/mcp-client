@@ -1,0 +1,13 @@
+langchain-anthropic>=0.3.0
+langchain>=0.3.8
+mcp>=1.0.0
+python-dotenv>=1.0.1
+langgraph>=0.2.53
+langchain-openai>=0.2.10
+langchain-ollama<=0.2.2rc1
+jsonschema-pydantic>=0.6
+aiosqlite>=0.20.0
+langgraph-checkpoint-sqlite>=2.0.1
+requests>=2.32.3
+fastapi>=0.70.0
+uvicorn>=0.15.0
