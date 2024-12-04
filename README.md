@@ -58,7 +58,7 @@ A **simple REST API** and **CLI client** to interact with [Model Context Protoco
    uv run cli.py
    ```
    To explore the available commands, use the `help` option. You can chat with LLM using `chat` command.
-   Sample command:
+   Sample prompts:
    ```bash
      What is the capital city of India?
     ```
