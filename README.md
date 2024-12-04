@@ -27,7 +27,7 @@ A **simple REST API** and **CLI client** to interact with [Model Context Protoco
 
 1. Clone the repository:
    ```bash
-   git clone 
+   git clone https://github.com/rakesh-eltropy/mcp-client.git
    ```
 
 2. **Navigate to the Project Directory**
