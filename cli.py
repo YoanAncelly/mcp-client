@@ -113,8 +113,13 @@ def process_message_chunk(message_chunk):
         message content.
     """
     if isinstance(message_chunk, AIMessageChunk):
-        content = message_chunk.content
-        print(content, end="", flush=True)  # Print message content incrementally
+        content = message_chunk.content # Get the content of the message chunk
+        if isinstance(content, list):
+            extracted_text = ''.join(item['text'] for item in content if 'text' in item)
+            print(extracted_text, end="", flush=True)  # Print message content incrementally
+        else:
+            print(content, end="", flush=True)
+
 
 
 def process_final_value_chunk():

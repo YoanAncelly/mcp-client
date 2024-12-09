@@ -142,13 +142,15 @@ def create_server_parameters(server_config: dict) -> List[StdioServerParameters]
 
 def initialize_model(llm_config: dict):
     """Initialize the language model using the provided configuration."""
-    return init_chat_model(
-        model=llm_config.get("model", "gpt-4o-mini"),
-        model_provider=llm_config.get("provider", "openai"),
-        api_key=llm_config.get("api_key"),
-        temperature=llm_config.get("temperature", 0)
-    )
-
+    api_key = llm_config.get("api_key")
+    init_args = {
+        "model": llm_config.get("model", "gpt-4o-mini"),
+        "model_provider": llm_config.get("provider", "openai"),
+        "temperature": llm_config.get("temperature", 0)
+    }
+    if api_key:
+        init_args["api_key"] = api_key
+    return init_chat_model(**init_args)
 
 def create_chat_prompt(server_config: dict) -> ChatPromptTemplate:
     """Create chat prompt template from server configuration."""
