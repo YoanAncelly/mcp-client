@@ -4,21 +4,16 @@ This module contains the base functions and classes for the MCP client.
 
 import json
 import os
-from typing import List, Type, TypedDict, Annotated
+from typing import List, Type
 
-from langchain_core.messages import BaseMessage
-from langchain_core.tools import BaseTool, ToolException
+from langchain.tools.base import BaseTool, ToolException
 from langchain_core.prompts import ChatPromptTemplate
-from langgraph.graph.graph import CompiledGraph
-from langgraph.graph import add_messages
-from langgraph.managed import IsLastStep
-
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain.chat_models import init_chat_model
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 from pydantic import BaseModel
 from jsonschema_pydantic import jsonschema_to_pydantic
-from langchain.chat_models import init_chat_model
 
 CONFIG_FILE = 'mcp-server-config.json'
 
@@ -67,15 +62,8 @@ def create_mcp_tool(
     return McpTool()
 
 
-class AgentState(TypedDict):
-    """Defines the state of the agent in terms of messages and other properties."""
-    messages: Annotated[list[BaseMessage], add_messages]
-    is_last_step: IsLastStep
-    today_datetime: str
-
-
 async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParameters]) -> List[BaseTool]:
-    """Convert MCP tools to LangChain tools"""
+    """Convert MCP tools to LangChain tools."""
     langchain_tools = []
 
     for server_param in server_params:
@@ -86,19 +74,7 @@ async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParamete
 
 
 async def get_mcp_tools(server_param: StdioServerParameters) -> List[BaseTool]:
-    """
-    Asynchronously retrieves and converts tools from a server using specified parameters.
-
-    Args:
-        server_param (StdioServerParameters): Parameters that specify which server to connect to.
-
-    Returns:
-        List[BaseTool]: A list of tools converted into the LangChain format.
-
-    This function establishes a connection to a specified server using the given parameters,
-    initializes a session, and retrieves the list of available tools. Each tool is then
-    converted to the LangChain format and added to a list, which is returned upon completion.
-    """
+    """Asynchronously retrieves and converts tools from a server using specified parameters"""
     mcp_tools = []
 
     async with stdio_client(server_param) as (read, write):
@@ -123,19 +99,15 @@ def load_server_config() -> dict:
 def create_server_parameters(server_config: dict) -> List[StdioServerParameters]:
     """Create server parameters from the server configuration."""
     server_parameters = []
-    # Iterate over each server configuration
     for config in server_config["mcpServers"].values():
         server_parameter = StdioServerParameters(
             command=config["command"],
             args=config.get("args", []),
             env={**config.get("env", {}), "PATH": os.getenv("PATH")}
         )
-        # Update environment variables from the system environment
         for key, value in server_parameter.env.items():
-            # If the value is empty and the key is in the system environment
             if len(value) == 0 and key in os.environ:
-                server_parameter.env.update({key: os.getenv(key)})  # Update the value with the system environment value
-        # Add the server parameter to the list
+                server_parameter.env[key] = os.getenv(key)
         server_parameters.append(server_parameter)
     return server_parameters
 
@@ -146,40 +118,37 @@ def initialize_model(llm_config: dict):
     init_args = {
         "model": llm_config.get("model", "gpt-4o-mini"),
         "model_provider": llm_config.get("provider", "openai"),
-        "temperature": llm_config.get("temperature", 0)
+        "temperature": llm_config.get("temperature", 0),
+        "streaming": True,
     }
     if api_key:
         init_args["api_key"] = api_key
     return init_chat_model(**init_args)
 
-def create_chat_prompt(server_config: dict) -> ChatPromptTemplate:
+
+def create_chat_prompt(client: str, server_config: dict) -> ChatPromptTemplate:
     """Create chat prompt template from server configuration."""
+    system_prompt = server_config.get("systemPrompt", "")
+    if client == "rest":
+        system_prompt = system_prompt + "\nGive the output in the json format only. Please do not include json formatting. Give plain json output."
     return ChatPromptTemplate.from_messages([
-        ("system", server_config["systemPrompt"]),
-        ("placeholder", "{messages}")
+        ("system", system_prompt),
+        ("user", "{messages}"),
+        ("placeholder", "{agent_scratchpad}"),
     ])
 
 
-async def initialise_tools() -> CompiledGraph:
-    """
-    Initializes tools for the server.
-
-    This asynchronous function performs the initialization of various tools and configurations required by the server. It loads the server configuration, creates server parameters, and converts them into LangChain tools. It also initializes the model and creates a chat prompt and a reactive agent executor.
-
-    Returns:
-        CompiledGraph: A compiled graph of the agent executor.
-    """
+async def initialise_tools(client: str) -> AgentExecutor:
+    """Initializes tools for the server."""
     server_config = load_server_config()
     server_params = create_server_parameters(server_config)
     langchain_tools = await convert_mcp_to_langchain_tools(server_params)
 
     model = initialize_model(server_config.get("llm", {}))
-    prompt = create_chat_prompt(server_config)
+    prompt = create_chat_prompt(client, server_config)
 
-    agent_executor = create_react_agent(
-        model,
-        langchain_tools,
-        state_schema=AgentState,
-        state_modifier=prompt,
-    )
+    agent = create_tool_calling_agent(model, langchain_tools, prompt)
+
+    agent_executor = AgentExecutor(agent=agent, tools=langchain_tools)
+
     return agent_executor
