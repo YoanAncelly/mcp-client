@@ -29,6 +29,8 @@ async def list_tools() -> None:
 async def handle_chat_mode():
     """Handle chat mode for the LangChain agent."""
     langchain_tools = await initialise_tools()
+    chat_history = []
+    is_last_step = False
 
     while True:
         try:
@@ -36,11 +38,19 @@ async def handle_chat_mode():
             if user_message.lower() in ["exit", "quit"]:
                 print("Exiting chat mode.")
                 break
+            if user_message.lower() in ["clear", "cls"]:
+                os.system("cls" if sys.platform == "win32" else "clear")
+                chat_history = []
+                is_last_step = True
+                continue
 
+            chat_history.append(HumanMessage(content=user_message))
             input_messages = {
-                "messages": [HumanMessage(content=user_message)],
+                "messages": chat_history,
+                "is_last_step": is_last_step,
                 "today_datetime": datetime.now().isoformat(),
             }
+            is_last_step = False
 
             await query_response(input_messages, langchain_tools)
         except Exception as e:
@@ -67,6 +77,8 @@ async def query_response(input_messages: TypedDict, agent_executor: CompiledGrap
             stream_mode=["messages", "values"]
     ):
         process_chunk(chunk)
+        if isinstance(chunk, dict) and "messages" in chunk:
+            input_messages["messages"].append(AIMessage(content=chunk["messages"][-1].content))
 
     print("")  # Ensure a newline after the conversation ends
 
@@ -119,7 +131,6 @@ def process_message_chunk(message_chunk):
             print(extracted_text, end="", flush=True)  # Print message content incrementally
         else:
             print(content, end="", flush=True)
-
 
 
 def process_final_value_chunk():
