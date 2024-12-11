@@ -19,8 +19,12 @@ A **simple REST API** and **CLI client** to interact with [Model Context Protoco
 - Compatible with any LLM provider that supports APIs with function capabilities.
 - Examples:
   - **OpenAI**
-  - **Llama 3.2**
-  - Other LLM providers with function-based APIs.
+  - **Claude**
+  - **Gemini**
+  - **AWS Nova**
+  - **Groq**
+  - **Ollama**
+  - Essentially all LLM providers are supported as long as they provide a function-based API. Please refer [langchain documentation](https://python.langchain.com/docs/integrations/chat/) for more details.
 
 
 ## Setup
@@ -72,8 +76,13 @@ A **simple REST API** and **CLI client** to interact with [Model Context Protoco
    ```
    You can use the following curl command to chat with llm:
    ```bash
-   curl -X POST -H "Content-Type: application/json" -d '{"message": "What type of products are there in my database?"}' http://localhost:8000/chat
+   curl -X POST -H "Content-Type: application/json" -d '{"message": "list all the products from my local database?"}' http://localhost:8000/chat
    ```
+   You can use the following curl command to chat with llm with streaming:
+   ```bash
+   curl -X POST -H "Content-Type: application/json" -d '{"message": "list all the products from my local database?", "streaming": true}' http://localhost:8000/chat
+   ```
+
 
 ## Contributing
 
