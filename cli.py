@@ -75,7 +75,7 @@ async def query_response(input_messages:  Dict[str, Any], agent_executor: AgentE
                 content = chunk["data"]["chunk"].content
                 if content:
                     # Print and accumulate the content
-                    if isinstance(content, list):  # Handle list of messages
+                    if isinstance(content, list):  # Handle multiple messages
                         for item in content:
                             message_chunk = process_message_chunk(item)
                             collected_response.append(message_chunk)

@@ -87,6 +87,13 @@ async def get_mcp_tools(server_param: StdioServerParameters) -> List[BaseTool]:
 
     return mcp_tools
 
+def is_json(string):
+    """Check if a string is a valid JSON."""
+    try:
+        json.loads(string)
+        return True
+    except ValueError:
+        return False
 
 def load_server_config() -> dict:
     """Load server configuration from available config files."""
