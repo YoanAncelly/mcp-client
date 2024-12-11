@@ -65,7 +65,7 @@ def create_mcp_tool(
 async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParameters]) -> List[BaseTool]:
     """Convert MCP tools to LangChain tools."""
     langchain_tools = []
-
+    # Retrieve tools from each server and add to the list
     for server_param in server_params:
         tools = await get_mcp_tools(server_param)
         langchain_tools.extend(tools)
@@ -87,6 +87,7 @@ async def get_mcp_tools(server_param: StdioServerParameters) -> List[BaseTool]:
 
     return mcp_tools
 
+
 def is_json(string):
     """Check if a string is a valid JSON."""
     try:
@@ -95,8 +96,10 @@ def is_json(string):
     except ValueError:
         return False
 
+
 def load_server_config() -> dict:
     """Load server configuration from available config files."""
+    # Load server configuration from the config file
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
             return json.load(f)  # Load server configuration
@@ -106,12 +109,14 @@ def load_server_config() -> dict:
 def create_server_parameters(server_config: dict) -> List[StdioServerParameters]:
     """Create server parameters from the server configuration."""
     server_parameters = []
+    # Create server parameters for each server configuration
     for config in server_config["mcpServers"].values():
         server_parameter = StdioServerParameters(
             command=config["command"],
             args=config.get("args", []),
             env={**config.get("env", {}), "PATH": os.getenv("PATH")}
         )
+        # Add environment variables from the system if not provided
         for key, value in server_parameter.env.items():
             if len(value) == 0 and key in os.environ:
                 server_parameter.env[key] = os.getenv(key)
@@ -122,12 +127,14 @@ def create_server_parameters(server_config: dict) -> List[StdioServerParameters]
 def initialize_model(llm_config: dict):
     """Initialize the language model using the provided configuration."""
     api_key = llm_config.get("api_key")
+    # Initialize the language model with the provided configuration
     init_args = {
         "model": llm_config.get("model", "gpt-4o-mini"),
         "model_provider": llm_config.get("provider", "openai"),
         "temperature": llm_config.get("temperature", 0),
         "streaming": True,
     }
+    # Add API key if provided
     if api_key:
         init_args["api_key"] = api_key
     return init_chat_model(**init_args)
@@ -145,17 +152,17 @@ def create_chat_prompt(client: str, server_config: dict) -> ChatPromptTemplate:
     ])
 
 
-async def initialise_tools(client: str) -> AgentExecutor:
-    """Initializes tools for the server."""
-    server_config = load_server_config()
-    server_params = create_server_parameters(server_config)
-    langchain_tools = await convert_mcp_to_langchain_tools(server_params)
+async def create_agent_executor(client: str) -> AgentExecutor:
+    """Create an agent executor for the specified client."""
+    server_config = load_server_config()  # Load server configuration
+    server_params = create_server_parameters(server_config)  # Create server parameters
+    langchain_tools = await convert_mcp_to_langchain_tools(server_params)  # Convert MCP tools to LangChain tools
 
-    model = initialize_model(server_config.get("llm", {}))
-    prompt = create_chat_prompt(client, server_config)
+    model = initialize_model(server_config.get("llm", {}))  # Initialize the language model
+    prompt = create_chat_prompt(client, server_config)  # Create chat prompt template
 
-    agent = create_tool_calling_agent(model, langchain_tools, prompt)
+    agent = create_tool_calling_agent(model, langchain_tools, prompt)  # Create the agent
 
-    agent_executor = AgentExecutor(agent=agent, tools=langchain_tools)
+    agent_executor = AgentExecutor(agent=agent, tools=langchain_tools)  # Create the agent executor
 
     return agent_executor

@@ -13,7 +13,7 @@ from mcp_client.base import (
     load_server_config,
     create_server_parameters,
     convert_mcp_to_langchain_tools,
-    initialise_tools
+    create_agent_executor
 )
 
 
@@ -30,7 +30,7 @@ async def list_tools() -> None:
 async def handle_chat_mode():
     """Handle chat mode for the LangChain agent."""
     print("\nInitializing chat mode...")
-    langchain_tools = await initialise_tools("cli")
+    agent_executor_cli = await create_agent_executor("cli")
     print("\nInitialized chat mode...")
 
     # Maintain a chat history of messages
@@ -55,7 +55,7 @@ async def handle_chat_mode():
                 "messages": chat_history
             }
             # Query the assistant and get a fully formed response
-            assistant_response = await query_response(input_messages, langchain_tools)
+            assistant_response = await query_response(input_messages, agent_executor_cli)
 
             # Append the assistant's response to the history
             chat_history.append(AIMessage(content=assistant_response))
@@ -66,7 +66,7 @@ async def handle_chat_mode():
             continue
 
 
-async def query_response(input_messages:  Dict[str, Any], agent_executor: AgentExecutor) -> str:
+async def query_response(input_messages: Dict[str, Any], agent_executor: AgentExecutor) -> str:
     """Query the assistant for a response"""
     collected_response = []
     try:
@@ -116,10 +116,10 @@ async def interactive_mode():
 
     while True:
         try:
-            command = input(">>> ").strip()
+            command = input(">>> ").strip() # Get user input
             if not command:
                 continue
-            should_continue = await handle_command(command)
+            should_continue = await handle_command(command) # Handle the command
             if not should_continue:
                 return
         except KeyboardInterrupt:

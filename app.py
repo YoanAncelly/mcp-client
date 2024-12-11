@@ -15,7 +15,7 @@ from mcp_client.base import (
     load_server_config,
     create_server_parameters,
     convert_mcp_to_langchain_tools,
-    initialise_tools,
+    create_agent_executor,
     is_json
 )
 
@@ -49,9 +49,9 @@ async def list_tools() -> List[str]:
 async def handle_chat(input_message: Dict[str, Any] = Body(...)):
     """Handle chat messages."""
     try:
-        langchain_tools = await initialise_tools("rest")
+        agent_executor_rest = await create_agent_executor("rest")
         user_message = input_message.get("message", "")
-        streaming = input_message.get("streaming", False)
+        streaming = input_message.get("streaming", False)  # Check if streaming is enabled
         if not user_message:
             raise HTTPException(status_code=400, detail="Message content is required")
 
@@ -59,13 +59,15 @@ async def handle_chat(input_message: Dict[str, Any] = Body(...)):
             "messages": [HumanMessage(content=user_message)],
         }
         if streaming is False:
-            response = await query_response_without_streaming(input_messages, langchain_tools)
+            response = await query_response_without_streaming(input_messages, agent_executor_rest)
             return response
         else:
             async def event_stream():
-                async for message_chunk in query_response_with_streaming(input_messages, langchain_tools):
-                    yield message_chunk
-            return StreamingResponse(event_stream(), media_type="application/json", headers={"Transfer-Encoding": "chunked"})
+                async for message_chunk in query_response_with_streaming(input_messages, agent_executor_rest):
+                    yield message_chunk  # Stream the message chunk
+
+            return StreamingResponse(event_stream(), media_type="application/json",
+                                     headers={"Transfer-Encoding": "chunked"})
     except Exception as e:
         error_trace = traceback.format_exc()
         print(error_trace)
@@ -126,10 +128,10 @@ async def query_response_with_streaming(input_messages: Dict[str, Any], agent_ex
                     if isinstance(content, list):  # Handle multiple messages
                         for item in content:
                             message_chunk = _process_message_chunk(item)
-                            yield message_chunk
+                            yield message_chunk  # Stream the message chunk
                     else:  # Handle single message
                         message_chunk = _process_message_chunk(content)
-                        yield message_chunk
+                        yield message_chunk  # Stream the message chunk
     except Exception as e:
         error_trace = traceback.format_exc()
         print(error_trace)
