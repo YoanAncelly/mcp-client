@@ -5,9 +5,10 @@ import asyncio
 import os
 import sys
 import traceback
-from typing import Dict, Any
-from langchain.agents import AgentExecutor
-from langchain_core.messages import HumanMessage, AIMessage
+from datetime import datetime
+from typing import TypedDict
+from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
+from langgraph.graph.graph import CompiledGraph
 
 from mcp_client.base import (
     load_server_config,
@@ -47,12 +48,13 @@ async def handle_chat_mode():
                 os.system("cls" if sys.platform == "win32" else "clear")
                 chat_history = []
                 continue
-
-            # Append the user's message to the chat history
-            chat_history.append(HumanMessage(content=user_message))
-
+            all_messages = []
+            # Append the chat history to all messages
+            all_messages.extend(chat_history)
+            all_messages = [HumanMessage(content=user_message)]
             input_messages = {
-                "messages": chat_history
+                "messages": all_messages,
+                "today_datetime": datetime.now().isoformat(),
             }
             # Query the assistant and get a fully formed response
             assistant_response = await query_response(input_messages, agent_executor_cli)
@@ -66,47 +68,53 @@ async def handle_chat_mode():
             continue
 
 
-async def query_response(input_messages: Dict[str, Any], agent_executor: AgentExecutor) -> str:
-    """Query the assistant for a response"""
+async def query_response(input_messages: TypedDict, agent_executor: CompiledGraph) -> str:
+    """Query the assistant and get a fully formed response."""
     collected_response = []
-    try:
-        async for chunk in agent_executor.astream_events(input=input_messages, version="v2"):
-            if chunk["event"] == "on_chat_model_stream":
-                content = chunk["data"]["chunk"].content
-                if content:
-                    # Print and accumulate the content
-                    if isinstance(content, list):  # Handle multiple messages
-                        for item in content:
-                            message_chunk = process_message_chunk(item)
-                            collected_response.append(message_chunk)
-                    else:  # Handle single message
-                        message_chunk = process_message_chunk(content)
-                        collected_response.append(message_chunk)
-            elif chunk["event"] == "on_tool_start":  # Print tool start and end events
-                print("--")
-                print(f"Starting tool: {chunk['name']} with inputs: {chunk['data'].get('input')}")
-            elif chunk["event"] == "on_tool_end":  # Print tool start and end events
-                print(f"Done tool: {chunk['name']}")
-                print("--")
 
-        print("")  # Ensure a newline after the conversation ends
-        return "".join(collected_response)
-    except Exception as e:
-        error_trace = traceback.format_exc()
-        print(error_trace)
-        print(f"Error processing messages: {e}")
-        return ""
+    async for chunk in agent_executor.astream(
+            input_messages,
+            stream_mode=["messages", "values"]
+    ):
+        # Process the chunk and append the response to the collected response
+        process_chunk(chunk)
+        if isinstance(chunk, dict) and "messages" in chunk:
+            collected_response.append(chunk["messages"][-1].content)
+
+    print("")  # Ensure a newline after the conversation ends
+    return "".join(collected_response)
 
 
-def process_message_chunk(content) -> str:
-    """Process the message chunk and print the content"""
-    if 'text' in content:  # Check if the content is a message
-        print(content['text'], end="", flush=True)
-        return content['text']
-    elif isinstance(content, str):  # Check if the content is a string
-        print(content, end="", flush=True)
-        return content
-    return ""
+def process_chunk(chunk):
+    """Process the chunk and print the response."""
+    if isinstance(chunk, tuple) and chunk[0] == "messages":
+        process_message_chunk(chunk[1][0])
+    elif isinstance(chunk, dict) and "messages" in chunk:
+        process_final_value_chunk()
+    elif isinstance(chunk, tuple) and chunk[0] == "values":
+        process_tool_calls(chunk[1]['messages'][-1])
+
+
+def process_message_chunk(message_chunk):
+    """Process the message chunk and print the content."""
+    if isinstance(message_chunk, AIMessageChunk):
+        content = message_chunk.content  # Get the content of the message chunk
+        if isinstance(content, list):
+            extracted_text = ''.join(item['text'] for item in content if 'text' in item)
+            print(extracted_text, end="", flush=True)  # Print message content incrementally
+        else:
+            print(content, end="", flush=True)
+
+
+def process_final_value_chunk():
+    """Process the final value chunk and print the content."""
+    print("\n", flush=True)  # Ensure a newline after complete message
+
+
+def process_tool_calls(message):
+    """Process the tool calls and print the results."""
+    if isinstance(message, AIMessage) and message.tool_calls:
+        message.pretty_print()  # Format and print tool call results
 
 
 async def interactive_mode():
@@ -116,10 +124,10 @@ async def interactive_mode():
 
     while True:
         try:
-            command = input(">>> ").strip() # Get user input
+            command = input(">>> ").strip()  # Get user input
             if not command:
                 continue
-            should_continue = await handle_command(command) # Handle the command
+            should_continue = await handle_command(command)  # Handle the command
             if not should_continue:
                 return
         except KeyboardInterrupt:

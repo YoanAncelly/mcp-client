@@ -4,18 +4,29 @@ This module contains the base functions and classes for the MCP client.
 
 import json
 import os
-from typing import List, Type
+from typing import List, Type, TypedDict, Annotated
 
 from langchain.tools.base import BaseTool, ToolException
+from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langgraph.graph.graph import CompiledGraph
+from langgraph.prebuilt import create_react_agent
 from langchain.chat_models import init_chat_model
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 from pydantic import BaseModel
 from jsonschema_pydantic import jsonschema_to_pydantic
+from langgraph.graph import add_messages
+from langgraph.managed import IsLastStep
 
 CONFIG_FILE = 'mcp-server-config.json'
+
+
+class AgentState(TypedDict):
+    """Defines the state of the agent in terms of messages and other properties."""
+    messages: Annotated[list[BaseMessage], add_messages]
+    is_last_step: IsLastStep
+    today_datetime: str
 
 
 def create_mcp_tool(
@@ -144,7 +155,7 @@ def create_chat_prompt(client: str, server_config: dict) -> ChatPromptTemplate:
     """Create chat prompt template from server configuration."""
     system_prompt = server_config.get("systemPrompt", "")
     if client == "rest":
-        system_prompt = system_prompt + "\nGive the output in the json format only. Please do not include json formatting. Give plain json output."
+        system_prompt = system_prompt + "\nGive the output in the json format only. Provide the output without any code block wrappers (e.g., ```json or similar) or any extra formatting. Include the plain text output only."
     return ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("user", "{messages}"),
@@ -152,7 +163,7 @@ def create_chat_prompt(client: str, server_config: dict) -> ChatPromptTemplate:
     ])
 
 
-async def create_agent_executor(client: str) -> AgentExecutor:
+async def create_agent_executor(client: str) -> CompiledGraph:
     """Create an agent executor for the specified client."""
     server_config = load_server_config()  # Load server configuration
     server_params = create_server_parameters(server_config)  # Create server parameters
@@ -161,8 +172,11 @@ async def create_agent_executor(client: str) -> AgentExecutor:
     model = initialize_model(server_config.get("llm", {}))  # Initialize the language model
     prompt = create_chat_prompt(client, server_config)  # Create chat prompt template
 
-    agent = create_tool_calling_agent(model, langchain_tools, prompt)  # Create the agent
-
-    agent_executor = AgentExecutor(agent=agent, tools=langchain_tools)  # Create the agent executor
+    agent_executor = create_react_agent(
+        model,
+        langchain_tools,
+        state_schema=AgentState,
+        state_modifier=prompt,
+    )
 
     return agent_executor
