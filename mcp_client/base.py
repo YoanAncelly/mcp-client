@@ -27,6 +27,7 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     is_last_step: IsLastStep
     today_datetime: str
+    remaining_steps: int
 
 
 def create_mcp_tool(
