@@ -163,9 +163,76 @@ def process_message_chunk(message_chunk) -> str:
 
 
 def _process_message_chunk(content) -> str:
-    """Process the message chunk and print the content"""
-    if 'text' in content:  # Check if the content is a message
-        return content['text']
-    elif isinstance(content, str):  # Check if the content is a string
-        return content
-    return ""
+    """Process the message chunk and extract plain text"""
+
+    print("\n--- DEBUG: Raw content received in _process_message_chunk ---")
+    print(content)
+
+    def extract_plain_text(value, max_depth=5):
+        """Recursively extract plain text from nested JSON strings"""
+        try:
+            if max_depth <= 0:
+                return str(value)
+            # If dict, collect all string values recursively
+            if isinstance(value, dict):
+                # Special case: if dict has 'joke' key, return it directly
+                if 'joke' in value:
+                    return extract_plain_text(value['joke'], max_depth - 1)
+                # Otherwise, concatenate all values
+                texts = []
+                for v in value.values():
+                    texts.append(extract_plain_text(v, max_depth - 1))
+                return "\n\n".join(texts).strip()
+            # If string, check if it looks like JSON
+            if isinstance(value, str):
+                stripped = value.strip()
+                if (stripped.startswith("{") and stripped.endswith("}")) or \
+                   (stripped.startswith('{"') and stripped.endswith("}")):
+                    import json
+                    try:
+                        data = json.loads(stripped)
+                        return extract_plain_text(data, max_depth - 1)
+                    except Exception:
+                        return value  # Not valid JSON, return as is
+                else:
+                    return value
+            # If bytes, decode
+            if isinstance(value, bytes):
+                return value.decode('utf-8', errors='ignore')
+            # Else, convert to string
+            return str(value)
+        except Exception:
+            return str(value)
+
+    try:
+        # First extraction
+        text = None
+        if isinstance(content, dict) and 'text' in content:
+            text = extract_plain_text(content['text'])
+        else:
+            text = extract_plain_text(content)
+
+        # Additional flattening: if still JSON-like, parse again
+        import json
+        for _ in range(3):  # up to 3 extra attempts
+            stripped = text.strip()
+            if (stripped.startswith("{") and stripped.endswith("}")) or \
+               (stripped.startswith('{"') and stripped.endswith("}")):
+                try:
+                    data = json.loads(stripped)
+                    # Special case: if dict has 'joke' key, extract it
+                    if isinstance(data, dict) and 'joke' in data:
+                        text = extract_plain_text(data['joke'])
+                        break
+                    else:
+                        text = extract_plain_text(data)
+                except Exception:
+                    break  # not valid JSON, stop
+            else:
+                break  # plain text, stop
+
+        print("--- DEBUG: Final extracted text ---")
+        print(text)
+        return text
+    except Exception:
+        return str(content)

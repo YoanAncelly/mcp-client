@@ -171,7 +171,7 @@ def create_chat_prompt(client: str, server_config: dict) -> ChatPromptTemplate:
     """Create chat prompt template from server configuration."""
     system_prompt = server_config.get("systemPrompt", "")
     if client == "rest":
-        system_prompt = system_prompt + "\nGive the output in the json format only. Provide the output without any code block wrappers (e.g., ```json or similar) or any extra formatting. Include the plain text output only."
+        pass  # Removed JSON-only output instruction to allow natural language responses
     return ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("user", "{messages}"),
