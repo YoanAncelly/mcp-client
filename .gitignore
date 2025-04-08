@@ -12,3 +12,5 @@ venv/
 
 # jetbrains files
 .idea/
+
+mcp_server_browser_use.log
