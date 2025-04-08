@@ -139,6 +139,7 @@ def create_server_parameters(server_config: dict) -> List[StdioServerParameters]
 def initialize_model(llm_config: dict):
     """Initialize the language model using the provided configuration."""
     api_key = llm_config.get("api_key")
+    base_url = llm_config.get("base_url")
     # Initialize the language model with the provided configuration
     init_args = {
         "model": llm_config.get("model", "gpt-4o-mini"),
@@ -149,6 +150,9 @@ def initialize_model(llm_config: dict):
     # Add API key if provided
     if api_key:
         init_args["api_key"] = api_key
+    # Add base URL if provided
+    if base_url:
+        init_args["base_url"] = base_url
     return init_chat_model(**init_args)
 
 
