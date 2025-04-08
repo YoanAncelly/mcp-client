@@ -76,27 +76,38 @@ def create_mcp_tool(
 
 async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParameters]) -> List[BaseTool]:
     """Convert MCP tools to LangChain tools."""
+    print(f"Converting tools from {len(server_params)} server parameters")
     langchain_tools = []
     # Retrieve tools from each server and add to the list
-    for server_param in server_params:
+    for i, server_param in enumerate(server_params):
+        print(f"Processing server {i+1}/{len(server_params)}: {server_param.command}")
         tools = await get_mcp_tools(server_param)
+        print(f"Retrieved {len(tools)} tools from server {i+1}")
         langchain_tools.extend(tools)
 
+    print(f"Total tools converted: {len(langchain_tools)}")
     return langchain_tools
 
 
 async def get_mcp_tools(server_param: StdioServerParameters) -> List[BaseTool]:
     """Asynchronously retrieves and converts tools from a server using specified parameters"""
     mcp_tools = []
+    print(f"Connecting to MCP server: {server_param.command} {' '.join(server_param.args)}")
 
     async with stdio_client(server_param) as (read, write):
+        print("Connection established, creating client session")
         async with ClientSession(read, write) as session:
+            print("Initializing session...")
             await session.initialize()  # Initialize the session
+            print("Retrieving tools list...")
             tools: types.ListToolsResult = await session.list_tools()  # Retrieve tools from the server
+            print(f"Found {len(tools.tools)} tools available on server")
             # Convert each tool to LangChain format and add to list
             for tool in tools.tools:
+                print(f"Converting tool: {tool.name}")
                 mcp_tools.append(create_mcp_tool(tool, server_param))
 
+    print(f"Completed tool conversion, returning {len(mcp_tools)} tools")
     return mcp_tools
 
 
@@ -170,18 +181,33 @@ def create_chat_prompt(client: str, server_config: dict) -> ChatPromptTemplate:
 
 async def create_agent_executor(client: str) -> CompiledGraph:
     """Create an agent executor for the specified client."""
+    print("Loading server configuration...")
     server_config = load_server_config()  # Load server configuration
+    print(f"Server config loaded: {len(server_config.keys())} keys found")
+    
+    print("Creating server parameters...")
     server_params = create_server_parameters(server_config)  # Create server parameters
+    print(f"Server parameters created: {len(server_params)} servers configured")
+    
+    print("Converting MCP tools to LangChain tools...")
     langchain_tools = await convert_mcp_to_langchain_tools(server_params)  # Convert MCP tools to LangChain tools
+    print(f"Converted {len(langchain_tools)} tools successfully")
 
+    print("Initializing Model...")
     model = initialize_model(server_config.get("llm", {}))  # Initialize the language model
+    print(f"Model initialized: {model.__class__.__name__}")
+    
+    print("Creating chat prompt...")
     prompt = create_chat_prompt(client, server_config)  # Create chat prompt template
+    print(f"Prompt created for client: {client}")
 
+    print("Building agent executor...")
     agent_executor = create_react_agent(
         model,
         langchain_tools,
         state_schema=AgentState,
         state_modifier=prompt,
     )
+    print("Agent executor created successfully")
 
     return agent_executor
